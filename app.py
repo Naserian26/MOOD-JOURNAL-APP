@@ -9,6 +9,7 @@ import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
 from paystackapi.paystack import Paystack
+from flask_migrate import Migrate
 
 load_dotenv()
 
@@ -21,6 +22,8 @@ db.init_app(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+migrate = Migrate(app, db)
+
 # Paystack Configuration
 paystack_public_key = os.getenv('PAYSTACK_PUBLIC_KEY')
 paystack = Paystack(secret_key=os.getenv('PAYSTACK_SECRET_KEY'))
@@ -29,7 +32,14 @@ paystack = Paystack(secret_key=os.getenv('PAYSTACK_SECRET_KEY'))
 # Hugging Face API Setup
 HF_API_URL = "https://api-inference.huggingface.co/models/joeddav/distilbert-base-uncased-go-emotions"
 HF_HEADERS = {"Authorization": f"Bearer {os.getenv('HUGGINGFACE_API_KEY')}"}
-
+@app.route('/drop-alembic', methods=['GET'])
+def drop_alembic():
+    try:
+        db.session.execute("DROP TABLE IF EXISTS alembic_version;")
+        db.session.commit()
+        return "Dropped alembic_version table successfully!"
+    except Exception as e:
+        return f"Error: {e}"
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
