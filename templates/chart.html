@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h4 class="mb-0">Mood Visualization</h4>
+        <div class="d-flex gap-2">
+            <select id="timeRange" class="form-select form-select-sm">
+                <option value="7">Last 7 Days</option>
+                <option value="30" selected>Last 30 Days</option>
+                <option value="90">Last 90 Days</option>
+            </select>
+            <select id="chartType" class="form-select form-select-sm">
+                <option value="line">Line Chart</option>
+                <option value="bar">Bar Chart</option>
+                <option value="radar">Radar Chart</option>
+                <option value="doughnut">Doughnut Chart</option>
+            </select>
+        </div>
+    </div>
+    <div class="card-body">
+        <canvas id="moodChart" width="400" height="200"></canvas>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Mood Distribution</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="moodDistribution" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Mood Summary</h5>
+            </div>
+            <div class="card-body">
+                <div id="moodSummary"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const moodCtx = document.getElementById('moodChart').getContext('2d');
+    const distCtx = document.getElementById('moodDistribution').getContext('2d');
+    const timeRangeSelect = document.getElementById('timeRange');
+    const chartTypeSelect = document.getElementById('chartType');
+
+    let moodChart;
+    let moodDistributionChart;
+
+    async function loadCharts(days = 30, type = 'line') {
+        try {
+            const response = await fetch(`/chart-data?days=${days}&type=${type}`);
+            const data = await response.json();
+
+            // Destroy previous charts if they exist
+            if (moodChart) moodChart.destroy();
+            if (moodDistributionChart) moodDistributionChart.destroy();
+
+            // Configure tooltips to handle all chart types
+            const tooltipCallback = function(context) {
+                let label = context.dataset.label || '';
+                let value = context.parsed?.y ?? context.parsed ?? 0;
+                if (label) label += ': ';
+                label += value.toFixed(1) + '%';
+                return label;
+            };
+
+            // Main mood chart
+            const config = {
+                type: type,
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: { callbacks: { label: tooltipCallback } }
+                    }
+                }
+            };
+
+            // Scale adjustments
+            if (type === 'bar' || type === 'line') {
+                config.options.scales = {
+                    y: { beginAtZero: true, max: 100, title: { display: true, text: 'Mood Intensity (%)' } }
+                };
+            } else if (type === 'radar') {
+                config.options.scales = { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } } };
+            }
+
+            moodChart = new Chart(moodCtx, config);
+
+            // Mood Distribution chart (always doughnut)
+            moodDistributionChart = new Chart(distCtx, {
+                type: 'doughnut',
+                data: data,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: tooltipCallback } } }
+                }
+            });
+
+            // Update summary
+            updateMoodSummary(data);
+
+        } catch (error) {
+            console.error('Error loading charts:', error);
+        }
+    }
+
+    function updateMoodSummary(data) {
+        const summaryDiv = document.getElementById('moodSummary');
+        let maxMood = '', maxScore = 0;
+        let minMood = '', minScore = 100;
+
+        data.datasets[0].data.forEach((score, i) => {
+            const mood = data.labels[i];
+            if (score > maxScore) { maxScore = score; maxMood = mood; }
+            if (score < minScore) { minScore = score; minMood = mood; }
+        });
+
+        const getMoodColor = mood => {
+            switch(mood) {
+                case 'Happy': return 'success';
+                case 'Sad': return 'primary';
+                case 'Angry': return 'danger';
+                case 'Calm': return 'info';
+                case 'Anxious': return 'warning';
+                default: return 'secondary';
+            }
+        };
+
+        summaryDiv.innerHTML = `
+            <div class="d-flex justify-content-between mb-2">
+                <span>Dominant Mood:</span>
+                <span class="badge bg-${getMoodColor(maxMood)}">${maxMood} (${maxScore.toFixed(1)}%)</span>
+            </div>
+            <div class="d-flex justify-content-between mb-2">
+                <span>Least Common:</span>
+                <span class="badge bg-${getMoodColor(minMood)}">${minMood} (${minScore.toFixed(1)}%)</span>
+            </div>
+            <div class="d-flex justify-content-between">
+                <span>Entries in Period:</span>
+                <span class="badge bg-info">${data.labels.length}</span>
+            </div>
+        `;
+    }
+
+    // Initial load
+    loadCharts();
+
+    // Event listeners
+    timeRangeSelect.addEventListener('change', () => loadCharts(timeRangeSelect.value, chartTypeSelect.value));
+    chartTypeSelect.addEventListener('change', () => loadCharts(timeRangeSelect.value, chartTypeSelect.value));
+});
+</script>
+{% endblock %}

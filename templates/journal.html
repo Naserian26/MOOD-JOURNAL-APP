@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h4>{% if entry %}Edit Journal Entry{% else %}New Journal Entry{% endif %}</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="content" class="form-label">How are you feeling today?</label>
+                        <textarea class="form-control" id="content" name="content" rows="8" required>{% if entry %}{{ entry.content }}{% endif %}</textarea>
+                        <div class="form-text">Share your thoughts and feelings. Your entry will be analyzed for mood insights.</div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            {% if entry %}Update Entry{% else %}Save Entry{% endif %}
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Mood Tracking Tips</h5>
+            </div>
+            <div class="card-body">
+                <ul class="mb-0">
+                    <li>Be honest about your feelings - this journal is for your eyes only</li>
+                    <li>Include specific events that influenced your mood</li>
+                    <li>Notice patterns in your emotions over time</li>
+                    <li>Use this tool to identify triggers for different moods</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Emotion Analysis Debug</h5>
+            </div>
+            <div class="card-body">
+                <p>This section shows the raw emotion analysis results for debugging purposes.</p>
+                <div id="emotion-debug"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelector('form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const content = document.getElementById('content').value;
+    
+    // Show loading
+    document.getElementById('emotion-debug').innerHTML = '<p>Analyzing emotions...</p>';
+    
+    try {
+        // Simulate the sentiment analysis for debugging
+        const response = await fetch('/analyze-sentiment', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ content: content })
+        });
+        
+        const data = await response.json();
+        
+        // Display the results
+        let debugHtml = '<h6>Raw Analysis Results:</h6><ul>';
+        data.labels.forEach((label, index) => {
+            debugHtml += `<li>${label}: ${data.scores[index].toFixed(2)}%</li>`;
+        });
+        debugHtml += '</ul>';
+        
+        document.getElementById('emotion-debug').innerHTML = debugHtml;
+        
+        // Submit the form after a short delay
+        setTimeout(() => {
+            this.submit();
+        }, 2000);
+        
+    } catch (error) {
+        document.getElementById('emotion-debug').innerHTML = `<p>Error: ${error.message}</p>`;
+        this.submit();
+    }
+});
+</script>
+{% endblock %}
