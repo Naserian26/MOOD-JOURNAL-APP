@@ -8,6 +8,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+from paystackapi.paystack import Paystack
 
 load_dotenv()
 
@@ -21,8 +22,9 @@ login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
 # Paystack Configuration
-paystack_secret_key = os.getenv('PAYSTACK_SECRET_KEY')
 paystack_public_key = os.getenv('PAYSTACK_PUBLIC_KEY')
+paystack = Paystack(secret_key=os.getenv('PAYSTACK_SECRET_KEY'))
+
 
 # Hugging Face API Setup
 HF_API_URL = "https://api-inference.huggingface.co/models/joeddav/distilbert-base-uncased-go-emotions"
@@ -349,47 +351,22 @@ def initiate_payment():
     amount_kes = data.get('amount')  # frontend sends amount in KES
     plan = data.get('plan', 'monthly')
 
-    # Validate amount
     try:
-        amount_kes = float(amount_kes)
-        if amount_kes <= 0:
-            return jsonify({'status': False, 'message': 'Invalid amount'}), 400
-    except (ValueError, TypeError):
+        amount_cents = int(float(amount_kes) * 100)
+    except:
         return jsonify({'status': False, 'message': 'Invalid amount'}), 400
 
-    # Convert KES to the smallest unit (cents)
-    amount_cents = int(amount_kes * 100)
-
-    payload = {
-        "email": current_user.email,
-        "amount": amount_cents,  # integer amount in KES cents
-        "currency": "KES",
-        "callback_url": url_for('verify_payment', _external=True),
-        "metadata": {
-            "user_id": current_user.id,
-            "plan": plan
-        }
-    }
-
-    headers = {
-        "Authorization": f"Bearer {paystack_secret_key}",
-        "Content-Type": "application/json"
-    }
-
     try:
-        response = requests.post(
-            "https://api.paystack.co/transaction/initialize",
-            json=payload,
-            headers=headers
-        )
-        print("Paystack initialize response:", response.text)  # Debug log
-        res_data = response.json()
-        if res_data.get('status'):
-            return jsonify({'status': True, 'message': 'Payment initialized', 'data': res_data['data']})
-        return jsonify({'status': False, 'message': res_data.get('message', 'Payment initialization failed')}), 400
-
+        response = paystack.transaction.initialize({
+            "email": current_user.email,
+            "amount": amount_cents,
+            "currency": "KES",
+            "callback_url": url_for('verify_payment', _external=True),
+            "metadata": {"user_id": current_user.id, "plan": plan}
+        })
+        return jsonify({'status': True, 'data': response['data']})
     except Exception as e:
-        return jsonify({'status': False, 'message': f'Error initializing payment: {str(e)}'}), 500
+        return jsonify({'status': False, 'message': str(e)}), 500
 
 
 @app.route('/verify-payment')
@@ -400,28 +377,28 @@ def verify_payment():
         flash('Invalid payment reference')
         return redirect(url_for('premium'))
 
-    headers = {"Authorization": f"Bearer {paystack_secret_key}"}
     try:
-        response = requests.get(f"https://api.paystack.co/transaction/verify/{reference}", headers=headers)
-        data = response.json()
+        response = paystack.transaction.verify(reference)
+        data = response['data']
 
-        if data.get('status') and data['data']['status'] == 'success':
-            user_id = data['data']['metadata']['user_id']
-            user = User.query.get(user_id)
+        if data['status'] == 'success':
+            user = User.query.get(data['metadata']['user_id'])
             if user:
                 user.is_premium = True
                 user.premium_expiry = datetime.utcnow() + timedelta(days=30)
                 db.session.commit()
-                flash('Payment successful! Account upgraded to premium.')
+                flash('Payment successful! Account upgraded.')
                 return redirect(url_for('dashboard'))
             flash('User not found')
             return redirect(url_for('premium'))
+
         flash('Payment verification failed')
         return redirect(url_for('premium'))
 
     except Exception as e:
         flash(f'Error verifying payment: {str(e)}')
         return redirect(url_for('premium'))
+
 
 
 # ----------------- Debug -----------------
