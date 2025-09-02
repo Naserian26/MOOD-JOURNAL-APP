@@ -1,24 +1,45 @@
 # Mood Journal – AI-Powered Emotion Tracker
 
 ## Overview
-**Mood Journal** is a web application that helps users **track, log, and analyze their emotions** through daily journaling. Using AI-powered mood analysis, the app provides insights into emotional patterns, supporting mental well-being.
+**Mood Journal** is a web application that allows users to **log their daily mood and journal entries**. It uses a PostgreSQL database and Flask backend to store users and journal data. Users can track their emotional patterns over time.  
+
+This README documents **the work I did** to enhance and deploy the project.
 
 ---
 
-## Features
+## What I Did
 
-- **User Authentication:** Secure registration and login for each user.
-- **Journal Entries:** Add daily notes with optional mood analysis.
-- **Mood Analysis:** AI interprets journal text to provide insights into emotional states.
-- **Premium Subscription:** Track premium users with `is_premium` and `premium_expiry`.
-- **Database:** Uses PostgreSQL to store users, journal entries, and subscription info.
-- **Deployment:** Can be run locally or online (e.g., Render).
+1. **Database Column Updates**
+   - Added new columns to the `user` table for premium subscription:
+     - `is_premium` (BOOLEAN, default `False`)
+     - `premium_expiry` (TIMESTAMP)
+     - `email` (VARCHAR)
+   - Added missing column `typed_mood` to `journal_entry` table.
+   - Used **SQLAlchemy** with `db.engine.begin()` to alter the database safely.
+
+2. **Flask Backend Fixes**
+   - Fixed runtime errors related to missing columns (`email`, `typed_mood`) in the database.
+   - Ensured SQLAlchemy database connection uses environment variable `DATABASE_URI`.
+
+3. **Deployment**
+   - Pushed all changes to GitHub.
+   - Deployed the app on **Render**.
+   - Verified that the live app works:  
+     [Mood Journal Live]https://mood-journal-app-2-c9i5.onrender.com
+
+4. **Environment Setup**
+   - Used `.env` to store sensitive data like database URI.
+   - Created a virtual environment `.venv` for dependencies.
+
+5. **Manual Database Management**
+   - Learned and applied **manual column additions** to avoid migration issues in production.
+   - Ensured columns exist before running the app to prevent `ProgrammingError`.
 
 ---
 
-## Installation
+## How to Run Locally
 
-1. **Clone the repository**
+1. Clone the repository:
    ```bash
    git clone https://github.com/yourusername/mood-journal.git
    cd mood-journal
