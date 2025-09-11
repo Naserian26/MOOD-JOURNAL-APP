@@ -8,6 +8,7 @@ import os
 import json
 from datetime import datetime, timedelta
 from dotenv import load_dotenv
+
 from paystackapi.paystack import Paystack
 from flask_migrate import Migrate
 
@@ -357,7 +358,6 @@ def premium():
         is_premium=current_user.is_premium_active()
     )
 
-
 @app.route('/initiate-payment', methods=['POST'])
 @login_required
 def initiate_payment():
@@ -365,22 +365,37 @@ def initiate_payment():
     amount_kes = data.get('amount')  # frontend sends amount in KES
     plan = data.get('plan', 'monthly')
 
+    if not amount_kes:
+        return jsonify({'status': False, 'message': 'Amount is required'}), 400
+
     try:
-        amount_cents = int(float(amount_kes) * 100)
-    except:
+        # Convert KES to kobo for Paystack
+        amount_kobo = int(float(amount_kes) * 100)
+    except ValueError:
         return jsonify({'status': False, 'message': 'Invalid amount'}), 400
 
     try:
-        response = paystack.transaction.initialize({
-            "email": current_user.email,
-            "amount": amount_cents,
-            "currency": "KES",
-            "callback_url": url_for('verify_payment', _external=True),
-            "metadata": {"user_id": current_user.id, "plan": plan}
-        })
-        return jsonify({'status': True, 'data': response['data']})
+        # Initialize Paystack transaction
+        response = paystack.transaction.initialize(
+            email=current_user.email,
+            amount=amount_kobo,
+            currency="KES",
+            callback_url=url_for('verify_payment', _external=True),
+            metadata={"user_id": current_user.id, "plan": plan}
+        )
+
+        # Return authorization URL and reference
+        if response['status']:
+            return jsonify({
+                'status': True,
+                'authorization_url': response['data']['authorization_url'],
+                'reference': response['data']['reference']
+            })
+        else:
+            return jsonify({'status': False, 'message': response.get('message', 'Initialization failed')}), 500
+
     except Exception as e:
-        return jsonify({'status': False, 'message': str(e)}), 500
+        return jsonify({'status': False, 'message': f"Payment initialization error: {str(e)}"}), 500
 
 
 @app.route('/verify-payment')
